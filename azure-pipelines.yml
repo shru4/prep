@@ -61,95 +61,95 @@ stages:
               environmentServiceNameAzureRM: $(azureServiceConnection)
               commandOptions: 'tfplan'
 
-  - stage: BuildAndPush
-    displayName: Build and Push
-    dependsOn: Terraform
-    jobs:
-      - job: Docker
-        steps:
-          - task: Docker@2
-            displayName: Build and Push Image
-            inputs:
-              command: buildAndPush
-              containerRegistry: $(acrServiceConnection)
-              repository: $(imageRepository)
-              dockerfile: app/Dockerfile
-              buildContext: app
-              tags: |
-                $(imageTag)
+  # - stage: BuildAndPush
+  #   displayName: Build and Push
+  #   dependsOn: Terraform
+  #   jobs:
+  #     - job: Docker
+  #       steps:
+  #         - task: Docker@2
+  #           displayName: Build and Push Image
+  #           inputs:
+  #             command: buildAndPush
+  #             containerRegistry: $(acrServiceConnection)
+  #             repository: $(imageRepository)
+  #             dockerfile: app/Dockerfile
+  #             buildContext: app
+  #             tags: |
+  #               $(imageTag)
 
-  - stage: Deploy
-    displayName: Deploy to AKS
-    dependsOn: BuildAndPush
-    jobs:
-      - job: Kubernetes
-        steps:
-          - task: AzureCLI@2
-            displayName: Get AKS Credentials and Deploy
-            inputs:
-              azureSubscription: $(azureServiceConnection)
-              scriptType: bash
-              scriptLocation: inlineScript
-              inlineScript: |
-                set -euo pipefail
+  # - stage: Deploy
+  #   displayName: Deploy to AKS
+  #   dependsOn: BuildAndPush
+  #   jobs:
+  #     - job: Kubernetes
+  #       steps:
+  #         - task: AzureCLI@2
+  #           displayName: Get AKS Credentials and Deploy
+  #           inputs:
+  #             azureSubscription: $(azureServiceConnection)
+  #             scriptType: bash
+  #             scriptLocation: inlineScript
+  #             inlineScript: |
+  #               set -euo pipefail
 
-                az aks get-credentials \
-                  --resource-group "$(aksResourceGroup)" \
-                  --name "$(aksClusterName)" \
-                  --overwrite-existing
+  #               az aks get-credentials \
+  #                 --resource-group "$(aksResourceGroup)" \
+  #                 --name "$(aksClusterName)" \
+  #                 --overwrite-existing
 
-                ACR_LOGIN_SERVER=$(az acr show \
-                  --name "$(acrLoginServer%%.azurecr.io)" \
-                  --resource-group "$(aksResourceGroup)" \
-                  --query loginServer -o tsv)
+  #               ACR_LOGIN_SERVER=$(az acr show \
+  #                 --name "$(acrLoginServer%%.azurecr.io)" \
+  #                 --resource-group "$(aksResourceGroup)" \
+  #                 --query loginServer -o tsv)
 
-                APP_ID=$(az identity list \
-                  --resource-group "$(aksResourceGroup)" \
-                  --query "[?contains(name, 'id-prep-app')].clientId | [0]" -o tsv)
+  #               APP_ID=$(az identity list \
+  #                 --resource-group "$(aksResourceGroup)" \
+  #                 --query "[?contains(name, 'id-prep-app')].clientId | [0]" -o tsv)
 
-                KV_NAME=$(az keyvault list \
-                  --resource-group "$(aksResourceGroup)" \
-                  --query "[0].name" -o tsv)
+  #               KV_NAME=$(az keyvault list \
+  #                 --resource-group "$(aksResourceGroup)" \
+  #                 --query "[0].name" -o tsv)
 
-                POSTGRES_FQDN=$(az postgres flexible-server list \
-                  --resource-group "$(aksResourceGroup)" \
-                  --query "[0].fullyQualifiedDomainName" -o tsv)
+  #               POSTGRES_FQDN=$(az postgres flexible-server list \
+  #                 --resource-group "$(aksResourceGroup)" \
+  #                 --query "[0].fullyQualifiedDomainName" -o tsv)
 
-                SB_NAME=$(az servicebus namespace list \
-                  --resource-group "$(aksResourceGroup)" \
-                  --query "[0].name" -o tsv)
+  #               SB_NAME=$(az servicebus namespace list \
+  #                 --resource-group "$(aksResourceGroup)" \
+  #                 --query "[0].name" -o tsv)
 
-                TENANT_ID=$(az account show --query tenantId -o tsv)
+  #               TENANT_ID=$(az account show --query tenantId -o tsv)
 
-                sed \
-                  -e "s|APP_IDENTITY_CLIENT_ID|${APP_ID}|g" \
-                  -e "s|KEY_VAULT_NAME|${KV_NAME}|g" \
-                  -e "s|TENANT_ID|${TENANT_ID}|g" \
-                  k8s/serviceaccount.yaml > /tmp/serviceaccount.yaml
+  #               sed \
+  #                 -e "s|APP_IDENTITY_CLIENT_ID|${APP_ID}|g" \
+  #                 -e "s|KEY_VAULT_NAME|${KV_NAME}|g" \
+  #                 -e "s|TENANT_ID|${TENANT_ID}|g" \
+  #                 k8s/serviceaccount.yaml > /tmp/serviceaccount.yaml
 
-                sed \
-                  -e "s|APP_IDENTITY_CLIENT_ID|${APP_ID}|g" \
-                  -e "s|KEY_VAULT_NAME|${KV_NAME}|g" \
-                  -e "s|TENANT_ID|${TENANT_ID}|g" \
-                  k8s/secretproviderclass.yaml > /tmp/secretproviderclass.yaml
+  #               sed \
+  #                 -e "s|APP_IDENTITY_CLIENT_ID|${APP_ID}|g" \
+  #                 -e "s|KEY_VAULT_NAME|${KV_NAME}|g" \
+  #                 -e "s|TENANT_ID|${TENANT_ID}|g" \
+  #                 k8s/secretproviderclass.yaml > /tmp/secretproviderclass.yaml
 
-                sed \
-                  -e "s|POSTGRES_FQDN|${POSTGRES_FQDN}|g" \
-                  -e "s|SERVICEBUS_NAMESPACE|${SB_NAME}|g" \
-                  k8s/configmap.yaml > /tmp/configmap.yaml
+  #               sed \
+  #                 -e "s|POSTGRES_FQDN|${POSTGRES_FQDN}|g" \
+  #                 -e "s|SERVICEBUS_NAMESPACE|${SB_NAME}|g" \
+  #                 k8s/configmap.yaml > /tmp/configmap.yaml
 
-                sed \
-                  -e "s|ACR_LOGIN_SERVER|${ACR_LOGIN_SERVER}|g" \
-                  -e "s|IMAGE_TAG|$(imageTag)|g" \
-                  k8s/deployment.yaml > /tmp/deployment.yaml
+  #               sed \
+  #                 -e "s|ACR_LOGIN_SERVER|${ACR_LOGIN_SERVER}|g" \
+  #                 -e "s|IMAGE_TAG|$(imageTag)|g" \
+  #                 k8s/deployment.yaml > /tmp/deployment.yaml
 
-                kubectl apply -f k8s/namespace.yaml
-                kubectl apply -f /tmp/serviceaccount.yaml
-                kubectl apply -f /tmp/configmap.yaml
-                kubectl apply -f /tmp/secretproviderclass.yaml
-                kubectl apply -f /tmp/deployment.yaml
-                kubectl apply -f k8s/service.yaml
+  #               kubectl apply -f k8s/namespace.yaml
+  #               kubectl apply -f /tmp/serviceaccount.yaml
+  #               kubectl apply -f /tmp/configmap.yaml
+  #               kubectl apply -f /tmp/secretproviderclass.yaml
+  #               kubectl apply -f /tmp/deployment.yaml
+  #               kubectl apply -f k8s/service.yaml
 
-                kubectl rollout status deployment/order-service -n order-service --timeout=180s
-                kubectl get pods -n order-service
-                kubectl get svc -n order-service
+  #               kubectl rollout status deployment/order-service -n order-service --timeout=180s
+  #               kubectl get pods -n order-service
+  #               kubectl get svc -n order-service
