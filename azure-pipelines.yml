@@ -32,7 +32,7 @@ stages:
               workingDirectory: $(terraformDirectory)
               backendServiceArm: $(azureServiceConnection)
               backendAzureRmResourceGroupName: terraform-rg
-              backendAzureRmStorageAccountName: terraformstateaccount
+              backendAzureRmStorageAccountName: terraformstateaccount4
               backendAzureRmContainerName: tfstate
               backendAzureRmKey: prep.tfstate
 
